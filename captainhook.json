@@ -1,0 +1,37 @@
+{
+    "config": {
+        "git-directory": ".git",
+        "fail-on-first-error": false,
+        "run-mode": "docker",
+        "run-exec": "docker exec -u $(id -u):$(id -g) apresentacao-de-sexta-backend",
+        "bootstrap": ""
+    },
+    "pre-commit": {
+        "enabled": true,
+        "actions": [
+            {
+                "action": "php ./vendor/bin/pint --dirty",
+                "options": [],
+                "conditions": []
+            },
+            {
+                "action": "php -d memory_limit=1G ./vendor/bin/phpstan analyse --no-progress",
+                "options": [],
+                "conditions": []
+            }
+        ]
+    },
+    "commit-msg": {
+        "enabled": true,
+        "actions": [
+            {
+                "action": "\\CaptainHook\\App\\Hook\\Message\\Action\\Regex",
+                "options": {
+                    "regex": "/^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\\(.+\\))?!?: .{1,}/",
+                    "error": "Mensagem de commit deve seguir Conventional Commits: tipo(escopo)?!?: descricao"
+                },
+                "conditions": []
+            }
+        ]
+    }
+}
