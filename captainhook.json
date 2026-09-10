@@ -21,6 +21,19 @@
             }
         ]
     },
+    "pre-push": {
+        "enabled": true,
+        "actions": [
+            {
+                "action": "\\CaptainHook\\App\\Hook\\Branch\\Action\\EnsureNaming",
+                "options": {
+                    "regex": "#^(?!main$).*#",
+                    "error": "Push direto para a branch main bloqueado. Trabalhe na develop e abra um Pull Request."
+                },
+                "conditions": []
+            }
+        ]
+    },
     "commit-msg": {
         "enabled": true,
         "actions": [
