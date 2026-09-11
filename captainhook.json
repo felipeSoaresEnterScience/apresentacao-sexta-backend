@@ -3,7 +3,7 @@
         "git-directory": ".git",
         "fail-on-first-error": false,
         "run-mode": "docker",
-        "run-exec": "docker exec -u $(id -u):$(id -g) apresentacao-de-sexta-backend",
+        "run-exec": "sh bin/captainhook-docker.sh",
         "bootstrap": ""
     },
     "pre-commit": {
