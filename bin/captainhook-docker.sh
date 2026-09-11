@@ -1,20 +1,17 @@
 #!/bin/sh
 # Runs CaptainHook inside the backend container.
-# Git GUIs (Cursor Source Control) often start hooks with a minimal PATH.
+# Supports: terminal, dev container (php local), GitHub Desktop/Cursor Flatpak (flatpak-spawn).
 
 set -e
 
 export PATH="/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 
 CONTAINER="${CAPTAINHOOK_DOCKER_CONTAINER:-apresentacao-de-sexta-backend}"
+DOCKER_MODE=""
+DOCKER_BIN=""
 
-resolve_docker() {
-    if command -v docker >/dev/null 2>&1; then
-        command -v docker
-        return 0
-    fi
-
-    for candidate in /usr/local/bin/docker /usr/bin/docker; do
+resolve_php() {
+    for candidate in /usr/local/bin/php /usr/bin/php; do
         if [ -x "$candidate" ]; then
             printf '%s\n' "$candidate"
             return 0
@@ -24,19 +21,62 @@ resolve_docker() {
     return 1
 }
 
-if ! DOCKER_BIN=$(resolve_docker); then
-    echo "CaptainHook: docker nao encontrado no PATH do git hook." >&2
-    echo "PHP deste projeto so existe no container. Commite pelo terminal integrado" >&2
-    echo "(nao pelo botao da Source Control) com o stack no ar." >&2
-    echo "PATH=${PATH}" >&2
-    exit 1
+resolve_docker() {
+    for candidate in /usr/bin/docker /usr/local/bin/docker /bin/docker; do
+        if [ -x "$candidate" ]; then
+            DOCKER_BIN="$candidate"
+            DOCKER_MODE="direct"
+            return 0
+        fi
+    done
+
+    if command -v docker >/dev/null 2>&1; then
+        DOCKER_BIN="$(command -v docker)"
+        DOCKER_MODE="direct"
+        return 0
+    fi
+
+    if command -v flatpak-spawn >/dev/null 2>&1; then
+        for candidate in /usr/bin/docker /usr/local/bin/docker docker; do
+            if flatpak-spawn --host "$candidate" version >/dev/null 2>&1; then
+                DOCKER_BIN="$candidate"
+                DOCKER_MODE="flatpak"
+                return 0
+            fi
+        done
+    fi
+
+    return 1
+}
+
+container_running() {
+    if [ "$DOCKER_MODE" = "flatpak" ]; then
+        flatpak-spawn --host "$DOCKER_BIN" inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null | grep -q true
+        return
+    fi
+
+    "$DOCKER_BIN" inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null | grep -q true
+}
+
+run_in_container() {
+    if [ "$DOCKER_MODE" = "flatpak" ]; then
+        exec flatpak-spawn --host "$DOCKER_BIN" exec -i -u "$(id -u):$(id -g)" "$CONTAINER" "$@"
+    fi
+
+    exec "$DOCKER_BIN" exec -i -u "$(id -u):$(id -g)" "$CONTAINER" "$@"
+}
+
+if resolve_docker && container_running; then
+    run_in_container "$@"
 fi
 
-if ! "$DOCKER_BIN" inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null | grep -q true; then
-    echo "CaptainHook: container ${CONTAINER} nao esta rodando." >&2
-    echo "No diretorio APRESENTACAO DE SEXTA, rode: docker compose up -d" >&2
-    echo "Docker usado: ${DOCKER_BIN}" >&2
-    exit 1
+if PHP_BIN="$(resolve_php)"; then
+    exec "$PHP_BIN" "$@"
 fi
 
-exec "$DOCKER_BIN" exec -i -u "$(id -u):$(id -g)" "$CONTAINER" "$@"
+echo "CaptainHook: nao foi possivel rodar os hooks." >&2
+echo "- Container ${CONTAINER} parado ou docker inacessivel" >&2
+echo "- PHP local tambem nao encontrado" >&2
+echo "Suba o stack: docker compose up -d (no diretorio APRESENTACAO DE SEXTA)" >&2
+echo "PATH=${PATH}" >&2
+exit 1
